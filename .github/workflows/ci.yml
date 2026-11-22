@@ -1,0 +1,58 @@
+name: DevOps CI - infraestructura
+
+on:
+  push:
+    branches: [main, develop, "chore/**", "feat/**", "fix/**", "test/**", "docs/**"]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validar configuracion y estructura
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar variables de desarrollo
+        run: cp .env.example .env
+      - name: Validar sintaxis Docker Compose
+        run: docker compose --env-file .env config --quiet
+      - name: Pruebas de infraestructura (sin dependencias externas)
+        run: python3 -m unittest discover -s tests -p 'test_devops_*.py' -v
+      - name: Verificar que no se versiono .env
+        run: |
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "::error::.env no debe estar versionado"
+            exit 1
+          fi
+
+  postgres-smoke:
+    name: PostgreSQL - prueba de arranque
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar entorno
+        run: cp .env.example .env
+      - name: Iniciar PostgreSQL
+        run: docker compose --env-file .env up -d --wait db
+      - name: Consultar base de datos
+        run: |
+          docker compose --env-file .env exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -tAc "SELECT 1"' | grep -qx '1'
+      - name: Estado de contenedores
+        if: always()
+        run: docker compose --env-file .env ps
+      - name: Logs en caso de fallo
+        if: failure()
+        run: docker compose --env-file .env logs --no-color db
+      - name: Detener entorno
+        if: always()
+        run: docker compose --env-file .env down
