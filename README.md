@@ -38,3 +38,7 @@ Las siguientes secciones serán desarrolladas por el equipo según avance el tra
 * Propuesta de tecnologías
 * Historias de usuario y tareas
 * Integración con otros módulos
+
+## DevOps
+
+Se preparará la configuración de infraestructura y automatización de integración continua para facilitar las pruebas e integración del módulo.
